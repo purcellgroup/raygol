@@ -2,110 +2,23 @@
 #include <raymath.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
+#include <stdatomic.h>
+#include "world.h"
 
 #define TARGET_FPS 60
 
-static const int SQUARE_SIZE = 16;
+#define SQUARE_SIZE 16
+#define WORLD_SCALE 10
+#define SCREEN_ROWS 42
+#define SCREEN_COLS 68
 
-typedef enum {
-  DEAD = 0, ALIVE = 1,
-} cell_state_t ;
+#define SCREEN_WIDTH  SQUARE_SIZE * SCREEN_COLS
+#define SCREEN_HEIGHT SQUARE_SIZE * SCREEN_ROWS
 
-typedef struct {
-  int i; int j; // world space
-  int x; int y; // screen space
-  cell_state_t state;
-} Cell;
+static atomic_bool RUN = false;
 
-typedef struct {
-  Cell **cells;
-  int rows;
-  int cols;
-  int sqsz;
-} World;
-
-typedef struct { int i; int j; } Dir;
-
-static const Dir LEFT         = { -1,  0 };
-static const Dir RIGHT        = {  1,  0 };
-static const Dir DOWN         = {  0,  1 };
-static const Dir UP           = {  0, -1 };
-static const Dir TOP_LEFT     = { -1, -1 };
-static const Dir TOP_RIGHT    = {  1, -1 };
-static const Dir BOTTOM_LEFT  = { -1,  1 };
-static const Dir BOTTOM_RIGHT = {  1,  1 };
-
-cell_state_t check_neighbor_state(World *w, Cell *c, Dir d) {
-  if ((c->j + d.j < 0) || (c->i + d.i < 0)) return DEAD;
-  if ((c->j + d.j >= w->rows) || (c->i + d.i >= w->cols)) return DEAD;
-  return w->cells[c->j + d.j][c->i + d.i].state;
-}
-
-uint32_t count_num_alive_neighbors(World *w, Cell *c) {
-  uint32_t num_alive = 0;
-  num_alive += check_neighbor_state(w, c, LEFT);
-  num_alive += check_neighbor_state(w, c, RIGHT);
-  num_alive += check_neighbor_state(w, c, DOWN);
-  num_alive += check_neighbor_state(w, c, UP);
-  num_alive += check_neighbor_state(w, c, TOP_LEFT);
-  num_alive += check_neighbor_state(w, c, TOP_RIGHT);
-  num_alive += check_neighbor_state(w, c, BOTTOM_LEFT);
-  num_alive += check_neighbor_state(w, c, BOTTOM_RIGHT);
-  return num_alive;
-}
-
-World world_init(int rows, int cols, int scale) {
-  Cell **cs = (Cell **) malloc(sizeof(Cell *) *
-                               (size_t)rows * (size_t)scale);
-  for (int j = 0; j < scale * rows; j++) cs[j] = (Cell *) malloc(sizeof(Cell)  *
-                                                                 (size_t)scale *
-                                                                 (size_t)cols);
-  for (int j = 0; j < scale * rows; j++) {
-    for (int i = 0; i < scale * cols; i++) {
-      cs[j][i] = (Cell) {
-        .i = i, .j = j,
-        .x = SQUARE_SIZE * i,
-        .y = SQUARE_SIZE * j,
-        .state = DEAD,
-      };
-    }
-  }
-  return (World) {
-    .cells = cs,
-    .rows = scale * rows,
-    .cols = scale * cols,
-    .sqsz = SQUARE_SIZE,
-  };
-}
-
-void world_destroy(World *w) {
-  printf("DESTROYING ZE WORLD\n");
-  for (int j = 0; j < w->rows; j++) free(w->cells[j]);
-  free(w->cells);
-}
-
-#define EFFECTIVE_NEIGHBORS(N, W)                                \
-  do {                                                           \
-    for (int j = 0; j < W->rows; j++) {                          \
-      for (int i = 0; i < W->cols; i++) {                        \
-        N[j][i] = count_num_alive_neighbors(W, &W->cells[j][i]); \
-      }                                                          \
-    }                                                            \
-  } while(0)                                                     \
-
-void world_next(World *w) {
-  uint32_t alive_at[w->rows][w->cols];
-  EFFECTIVE_NEIGHBORS(alive_at, w);
-  for (int j = 0; j < w->rows; j++) {
-    for (int i = 0; i < w->cols; i++) {
-      Cell *c = &w->cells[j][i];
-      uint32_t alive = alive_at[j][i];
-      if (c->state == ALIVE && alive < 2 || alive > 3) c->state = DEAD;
-      else if (alive == 3)                             c->state = ALIVE;
-    }
-  }
-}
+#define TO_WORLD(X,SZ)     (((float)X) / ((float)SZ))
+#define SNAP_TO_CELL(X,SZ) ((int)(X) - (int)(X) % SZ)
 
 void world_render(World *w) {
   for (int row = 0; row < w->rows; row++) {
@@ -118,14 +31,17 @@ void world_render(World *w) {
   }
 }
 
-#define TO_WORLD(X,SZ) ((((float)X) / ((float)SZ)))
 void mouse_handle_click(World *w, Camera2D *cam) {
-  // TODO: prevent clicking outside world
   if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
     Vector2 m = GetScreenToWorld2D(GetMousePosition(), *cam);
-    Cell *c =
-      &w->cells[(size_t)TO_WORLD(m.y, w->sqsz)][(size_t)TO_WORLD(m.x, w->sqsz)];
-    c->state = ALIVE;
+    int row = (int)TO_WORLD(m.y, w->sqsz);
+    int col = (int)TO_WORLD(m.x, w->sqsz);
+
+    // Check if the click is within the world bounds
+    if (row >= 0 && row < w->rows && col >= 0 && col < w->cols) {
+      Cell *c = &w->cells[row][col];
+      c->state = ALIVE;
+    }
   }
   if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
     Vector2 m_delta = GetMouseDelta();
@@ -168,12 +84,12 @@ void camera_reset(Camera2D *cam) {
   cam->offset = (Vector2) {0.0f, 0.0f};
 }
 
-void key_probe_int(bool *RUNNING) {
+void key_probe_int() {
   int k = GetKeyPressed();
   switch (k) {
   case KEY_ESCAPE: exit(EXIT_SUCCESS);
-  case KEY_SPACE: *RUNNING = !(*RUNNING); break;
-  default: return;
+  case KEY_SPACE: RUN = !RUN; return;
+  default:                    return;
   }
 }
 
@@ -187,7 +103,6 @@ void key_probe_char(World *w, Camera2D *cam) {
   }
 }
 
-#define SNAP_TO_CELL(X,SZ) ((int)(X) - (int)(X) % SZ)
 void mouse_handle_highlight(Camera2D *cam) {
   Vector2 m = GetScreenToWorld2D(GetMousePosition(), *cam);
   DrawRectangleLinesEx((Rectangle) { (float)SNAP_TO_CELL(m.x, SQUARE_SIZE),
@@ -210,16 +125,9 @@ int main(void) {
   struct hitlist hl = {0};
   on_exit(handle_exit, &hl);
 
-  const int WORLD_SCALE   = 10;
-  const int SCREEN_ROWS   = 42;
-  const int SCREEN_COLS   = 68;
-  const int SCREEN_WIDTH  = SQUARE_SIZE * SCREEN_COLS;
-  const int SCREEN_HEIGHT = SQUARE_SIZE * SCREEN_ROWS;
-
-  /* SetTraceLogLevel(LOG_NONE); // disable default logging if desired */
   SetConfigFlags(FLAG_VSYNC_HINT); // help with screen tearing
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Conway's Game of Life");
-  SetExitKey(KEY_NULL);
+  SetExitKey(KEY_NULL); // we handle escape with on_exit
 
   Camera2D camera = { 0 };
   camera.zoom = 1.0f;
@@ -229,15 +137,15 @@ int main(void) {
   RenderTexture2D cb = load_board_texture(WORLD_SCALE * SCREEN_COLS,
                                           WORLD_SCALE * SCREEN_ROWS);
 
-  World world = world_init(SCREEN_ROWS, SCREEN_COLS, WORLD_SCALE);
+  World world = world_init(SCREEN_ROWS, SCREEN_COLS,
+                           WORLD_SCALE, SQUARE_SIZE);
 
   hl.bg = &cb;
   hl.w  = &world;
 
-  bool RUNNING = false;
   while (!WindowShouldClose()) {
-    key_probe_int(&RUNNING);
-    if (RUNNING) world_next(&world);
+    key_probe_int();
+    if (RUN) world_next(&world);
     key_probe_char(&world, &camera);
     BeginDrawing();
       ClearBackground(BLACK);
