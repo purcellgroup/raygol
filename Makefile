@@ -8,7 +8,7 @@ all: clean main
 
 main: main.c
 	$(call print_in_color,$(YELLOW),\nCompiling to $(EXE) ...\n)
-	$(CC) $(CFLAGS) main.c -o $(EXE) $(RLFLAGS) -lncurses
+	$(CC) $(CFLAGS) main.c -o $(EXE) $(RLFLAGS)
 
 clean:
 	$(call print_in_color,$(RED),Cleaning ...\n)
