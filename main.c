@@ -134,6 +134,7 @@ int main(void) {
   
   SetTargetFPS(TARGET_FPS);
 
+  // WORLD_SCALE dictates size of World OUTSIDE of screen space.
   RenderTexture2D cb = load_board_texture(WORLD_SCALE * SCREEN_COLS,
                                           WORLD_SCALE * SCREEN_ROWS);
 
@@ -145,8 +146,8 @@ int main(void) {
 
   while (!WindowShouldClose()) {
     key_probe_int();
-    if (RUN) world_next(&world);
     key_probe_char(&world, &camera);
+    if (RUN) world_next(&world);
     BeginDrawing();
       ClearBackground(BLACK);
       BeginMode2D(camera);
