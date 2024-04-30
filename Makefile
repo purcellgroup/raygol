@@ -7,6 +7,12 @@ OBJS=io.o world.o
 
 all: clean main
 
+ortho_all: clean ortho
+
+ortho: world.o io.o main.c
+	$(call print_in_color,$(GREEN),\nCompiling to $(EXE) ...\n)
+	$(CC) $(CFLAGS) -D_ORTHOGRAPHIC main.c -o $(EXE) $(RLFLAGS) $(OBJS) -O2
+
 main: world.o io.o main.c
 	$(call print_in_color,$(GREEN),\nCompiling to $(EXE) ...\n)
 	$(CC) $(CFLAGS) main.c -o $(EXE) $(RLFLAGS) $(OBJS) -O2

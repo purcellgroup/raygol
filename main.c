@@ -18,10 +18,23 @@
 
 struct hitlist { RenderTexture2D *bg; World *w; };
 void handle_exit(int code, void *args);
+
 void world_render(World *);
+void world_render_ortho(World *);
 RenderTexture2D load_board_texture(int, int);
 
+int main_orthographic(void);
+int main_top_down(void);
+
 int main(void) {
+#ifdef _ORTHOGRAPHIC
+  return main_orthographic();
+#else
+  return main_top_down();
+#endif
+}
+
+int main_top_down(void) {
   struct hitlist hl = {0};
   on_exit(handle_exit, &hl);
 
@@ -52,7 +65,7 @@ int main(void) {
       ClearBackground(BLACK);
       BeginMode2D(camera);
         camera_handle_zoom(&camera);
-        DrawTexture(cb.texture, 0, 0, WHITE);
+        DrawTexture(cb.texture, 0, 0, DARKGRAY);
         mouse_handle_highlight(&world, &camera);
         mouse_handle_click(&world, &camera);
         world_render(&world);
@@ -60,7 +73,27 @@ int main(void) {
     EndDrawing();
   }
 
-  return 0;
+  return EXIT_SUCCESS;
+}
+
+int main_orthographic(void) {
+  /* struct hitlist hl = {0}; */
+  /* on_exit(handle_exit, &hl); */
+
+  /* SetConfigFlags(FLAG_VSYNC_HINT); // help with screen tearing */
+  /* InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, */
+  /*            "Conway's Game of Life [ORTHOGRAPHIC]"); */
+  /* SetExitKey(KEY_NULL); */
+  /* SetTargetFPS(TARGET_FPS); */
+
+  /* Camera3D camera = { 0 }; */
+  /* camera.position = (Vector3){ 0.0f, 0.0f, 10.0f }; */
+  /* camera.target = (Vector3){ 0.0f, 0.0f, 0.0f }; */
+  /* camera.up = (Vector3){ 0.0f, 1.0f, 0.0f }; */
+  /* camera.fovy = 45.0f; */
+  /* camera.projection = CAMERA_ORTHOGRAPHIC; */
+
+  return EXIT_SUCCESS;
 }
 
 void handle_exit(int code, void *args) {
@@ -86,15 +119,14 @@ RenderTexture2D load_board_texture(int rows, int cols) {
   RenderTexture2D cb = LoadRenderTexture(rows * SQUARE_SIZE,
                                          cols * SQUARE_SIZE);
   BeginTextureMode(cb);
-
-  for (int y = 0; y < cols; y++) {
-    for (int x = 0; x < rows; x++) {
-      DrawRectangle(x * SQUARE_SIZE, y * SQUARE_SIZE,
-                    SQUARE_SIZE, SQUARE_SIZE,
-                    (x + y) % 2 ? DARKGRAY : BLACK);
+    for (int y = 0; y < cols; y++) {
+      for (int x = 0; x < rows; x++) {
+        DrawRectangle(x * SQUARE_SIZE,
+                      y * SQUARE_SIZE,
+                      SQUARE_SIZE, SQUARE_SIZE,
+                      (x + y) % 2 ? DARKGRAY : BLACK);
+      }
     }
-  }
-
   EndTextureMode();
   return cb;
 }

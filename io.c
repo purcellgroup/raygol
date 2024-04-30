@@ -29,7 +29,6 @@ void mouse_handle_highlight(World *w, Camera2D *cam) {
                                      (float)w->sqsz, }, 2.5f, GREEN);
 }
 
-
 void mouse_handle_click(World *w, Camera2D *cam) {
   if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
     Vector2 m = GetScreenToWorld2D(GetMousePosition(), *cam);
@@ -67,4 +66,3 @@ void key_probe_char(World *w, Camera2D *cam) {
   default: return;
   }
 }
-
